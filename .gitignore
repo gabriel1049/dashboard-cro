@@ -1,0 +1,22 @@
+# Segredos e credenciais
+.env
+credentials/*
+!credentials/.gitkeep
+*service_account*.json
+client_secret*.json
+token.json
+
+# Next.js / Node
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Ambiente Python
+.venv/
+__pycache__/
+*.pyc
+
+# Saídas geradas
+output/
+exports/
