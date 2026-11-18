@@ -77,11 +77,25 @@ function labelOf(info: FieldInfo, revenueLabel: string) {
   return PT[info.apiName] ?? info.uiName;
 }
 
+/**
+ * Métricas de tempo do GA4 e o fator que as converte para segundos, a unidade do formato "duration".
+ * Sem a conversão, uma métrica em milissegundos apareceria mil vezes maior.
+ */
+const TIME_TO_SECONDS: Record<string, number> = {
+  TYPE_SECONDS: 1,
+  TYPE_MILLISECONDS: 0.001,
+  TYPE_MINUTES: 60,
+  TYPE_HOURS: 3600,
+};
+
+/** Fator para segundos se a métrica for de tempo; nas demais, 1 (valor sem mudança). */
+const secondsFactor = (info: FieldInfo) => TIME_TO_SECONDS[info.type ?? ""] ?? 1;
+
 /** Formato de exibição a partir do tipo que o metadata do GA4 informa para a métrica. */
 function formatOf(info: FieldInfo): FormatKind {
   const t = info.type ?? "";
   if (t.includes("CURRENCY")) return "brl";
-  if (t.includes("SECONDS")) return "duration";
+  if (t in TIME_TO_SECONDS) return "duration";
   if (t.includes("INTEGER")) return "int";
   // Taxa vem como TYPE_FLOAT, igual a uma média comum: só o nome da métrica diferencia.
   if (/Rate|Percentage/.test(info.apiName)) return "pct";
@@ -223,16 +237,18 @@ async function ExploreTable({
 
   // A dimensão date vem como AAAAMMDD; na tabela vira AAAA-MM-DD.
   const isoDay = (v: string) => (/^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6)}` : v);
+  // Métricas de tempo passam para segundos aqui, antes da tabela, dos totais e da exportação.
+  const factor = Object.fromEntries(metrics.map((m) => [m, secondsFactor(md.metrics.get(m)!)]));
   const rows: TableRow[] = res.data.rows.map((r) => ({
     id: r.key,
     values: {
       ...Object.fromEntries(dims.map((d) => [d, d === "date" ? isoDay(r.dims[d]) : r.dims[d]])),
-      ...Object.fromEntries(metrics.map((m) => [m, r.cur[m] ?? 0])),
+      ...Object.fromEntries(metrics.map((m) => [m, (r.cur[m] ?? 0) * factor[m]])),
     },
-    prev: r.prev ? Object.fromEntries(metrics.map((m) => [m, r.prev![m] ?? 0])) : undefined,
+    prev: r.prev ? Object.fromEntries(metrics.map((m) => [m, (r.prev![m] ?? 0) * factor[m]])) : undefined,
   }));
 
-  const total = res.data.totals.cur;
+  const total = Object.fromEntries(Object.entries(res.data.totals.cur).map(([m, v]) => [m, v * (factor[m] ?? 1)]));
   const truncated = rows.length >= LIMIT;
   return (
     <div className="space-y-5">
