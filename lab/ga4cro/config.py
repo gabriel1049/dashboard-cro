@@ -44,11 +44,15 @@ class Settings:
 def get_settings() -> Settings:
     """Lê e valida o .env. Valor ausente ou inválido vira RuntimeError com o que corrigir."""
     pid = os.getenv("GA4_PROPERTY_ID", "").strip()
+    if not pid:
+        # Mesmo critério do painel: sem GA4_PROPERTY_ID, vale a primeira de GA4_PROPERTIES (id=nome|fuso;...).
+        first = os.getenv("GA4_PROPERTIES", "").split(";")[0]
+        pid = first.split("=")[0].strip()
     # Só zeros é o valor de exemplo do .env.example.
     if not pid.isdigit() or set(pid) == {"0"}:
         raise RuntimeError(
-            "GA4_PROPERTY_ID ausente ou inválido no .env. Use apenas os números "
-            "do ID da propriedade (ex.: 469824674)."
+            "Propriedade ausente ou inválida no .env. Preencha GA4_PROPERTIES ou GA4_PROPERTY_ID "
+            "com o ID numérico da propriedade (Administrador > Detalhes da propriedade)."
         )
     mode = os.getenv("GA4_AUTH_MODE", "auto").strip().lower()
     if mode not in AUTH_MODES:

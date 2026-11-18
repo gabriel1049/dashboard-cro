@@ -26,20 +26,30 @@ Todos os filtros ficam na URL (`?periodo=last7&plataforma=Android&...`), então 
 
 ## Rodar localmente
 
-Requisitos: Node 20.9+ (testado no 24) e Python 3.11+ (só para o login).
+Requisitos: Node 20.9+ (testado no 24), Python 3.11+ (só para o login) e uma conta Google com acesso de Leitor (ou mais) às propriedades do GA4.
 
-```powershell
+1. Instale as dependências e crie o `.env`:
+
+```bash
 npm install
-copy .env.example .env
+cp .env.example .env          # Windows (cmd/PowerShell): copy .env.example .env
 ```
 
-Preencha o `.env` (veja os comentários no arquivo) e gere a credencial com o login abaixo. Depois:
+O `.env.example` já vem com as propriedades (Site e App) e os rótulos usados em produção. Só falta a credencial do GA4.
 
-```powershell
+2. Gere a credencial seguindo a seção [Credencial do GA4](#credencial-do-ga4) (OAuth com a sua conta ou Service Account).
+
+3. Rode o painel:
+
+```bash
 npm run dev
 ```
 
-Abra http://localhost:3000. Outros comandos: `npm run typecheck`, `npm run build`, `npm start`.
+Abra http://localhost:3000. Em desenvolvimento, sem `DASHBOARD_PASSWORD` no `.env`, a tela de login fica desligada. Sem credencial, cada bloco do painel mostra o que falta configurar.
+
+Outros comandos: `npm run typecheck`, `npm run build`, `npm start`.
+
+No `npm install`, o npm 11 avisa que o `postinstall` do `protobufjs` não rodou. Pode ignorar: esse script só imprime um aviso de versão.
 
 ## Credencial do GA4
 
@@ -57,14 +67,15 @@ Feito uma vez no [Google Cloud Console](https://console.cloud.google.com/):
 1. Projeto com a **Google Analytics Data API** ativada (APIs e serviços > Biblioteca).
 2. Tela de consentimento (Google Auth Platform): público Externo ou Interno; em Usuários de teste, o e-mail que enxerga a propriedade no GA4.
 3. Clientes > Criar cliente > **Aplicativo da Web**, com `http://localhost:8080/` em "URIs de redirecionamento autorizados". Baixe o JSON e salve como `credentials/client_secret.json`.
-4. Login (abre o navegador):
+4. Login (abre o navegador), a partir da raiz do projeto:
 
-```powershell
+```bash
 python -m venv .venv
-.\.venv\Scripts\pip install -r lab\requirements.txt
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install -r lab/requirements.txt
 cd lab
-..\.venv\Scripts\python.exe -m ga4cro login
-..\.venv\Scripts\python.exe -m ga4cro check
+python -m ga4cro login
+python -m ga4cro check
 ```
 
 O `login` grava `credentials/token.json`, que o Next.js lê. O `check` mostra o inventário da conta (eventos, métricas, restrições) e salva `output/discovery_<id>.json`.
