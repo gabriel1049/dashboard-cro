@@ -100,7 +100,12 @@ export default async function LoginPage({ searchParams }: { searchParams: SP }) 
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted">Google Analytics 4, somente leitura</p>
+        <p className="mt-6 text-center text-xs text-muted">
+          Google Analytics 4, somente leitura.{" "}
+          <a href="/privacidade" className="underline underline-offset-2 hover:text-ink-2">
+            Privacidade
+          </a>
+        </p>
       </div>
     </main>
   );

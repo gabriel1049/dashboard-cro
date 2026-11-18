@@ -80,7 +80,7 @@ python -m ga4cro check
 
 O `login` grava `credentials/token.json`, que o Next.js lê. O `check` mostra o inventário da conta (eventos, métricas, restrições) e salva `output/discovery_<id>.json`.
 
-**Token que expira em 7 dias:** com o app OAuth em modo Teste e público Externo, o Google invalida o token toda semana e o painel passa a mostrar "login expirado". Para evitar, clique em **Publicar app** na tela de Público (o aviso de "app não verificado" no login é normal para uso interno). Se acontecer, rode o `login` de novo.
+**Token que expira em 7 dias:** com o app OAuth em modo Teste e público Externo, o Google invalida o token toda semana e o painel passa a mostrar "login expirado". Para evitar, clique em **Publicar app** na tela de Público. O botão só libera com o Branding completo: página inicial (a raiz do painel publicado), link da política de privacidade (`/privacidade`, página pública do próprio painel) e o domínio deles em Domínios autorizados. Depois de publicar, rode o `login` de novo, porque o token gerado em Teste mantém o prazo de 7 dias. O aviso de "app não verificado" no login é normal para uso interno (Avançado > Acessar).
 
 ### Service Account (recomendado para produção)
 
@@ -108,7 +108,7 @@ Variáveis no servidor (nunca suba os arquivos de `credentials/`):
 - Credencial: `GA4_SERVICE_ACCOUNT_JSON` **ou** `GA4_OAUTH_CLIENT_ID` + `GA4_OAUTH_CLIENT_SECRET` + `GA4_OAUTH_REFRESH_TOKEN` (copie do `credentials/token.json`)
 - Acesso: `DASHBOARD_PASSWORD` e `DASHBOARD_SECRET`
 
-**Acesso ao painel.** Todas as páginas e a API passam pelo `src/proxy.ts`: sem sessão, a pessoa vai para `/login`. A senha é única para a equipe (`DASHBOARD_PASSWORD`) e a sessão fica num cookie assinado com HMAC por 14 dias (`DASHBOARD_SECRET`; trocar a chave derruba todas as sessões). Em produção, sem `DASHBOARD_PASSWORD` ninguém entra: a tela de login avisa que o acesso não foi configurado. As páginas saem com `noindex`.
+**Acesso ao painel.** Todas as páginas e a API passam pelo `src/proxy.ts`: sem sessão, a pessoa vai para `/login`. A senha é única para a equipe (`DASHBOARD_PASSWORD`) e a sessão fica num cookie assinado com HMAC por 14 dias (`DASHBOARD_SECRET`; trocar a chave derruba todas as sessões). Em produção, sem `DASHBOARD_PASSWORD` ninguém entra: a tela de login avisa que o acesso não foi configurado. A única página aberta além do login é `/privacidade`, a política que o Google exige para publicar o app OAuth. As páginas saem com `noindex`.
 
 ## Como os dados são tratados
 

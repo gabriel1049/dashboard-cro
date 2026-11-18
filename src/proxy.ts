@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { authMode, SESSION_COOKIE, verifySession } from "@/lib/auth";
 
-/** Rotas abertas sem sessão: a própria tela de login e a saída. */
-const PUBLIC = new Set(["/login", "/logout"]);
+/** Rotas abertas sem sessão: a tela de login, a saída e a política de privacidade (o Google exige o link público). */
+const PUBLIC = new Set(["/login", "/logout", "/privacidade"]);
 
 /**
  * Todo o painel exige sessão. Sem ela, páginas vão para /login (guardando o destino) e a API
