@@ -5,12 +5,13 @@ import { Suspense } from "react";
 import { TimeSeriesChart, type SeriesMetric, type SeriesPoint } from "@/components/charts/TimeSeriesChart";
 import { DashboardShell } from "@/components/shell/DashboardShell";
 import { DataTable } from "@/components/table/DataTable";
+import { CardFrame, ExportData, ExportMenu } from "@/components/ui/CardExport";
 import { LeadCoverageNotice } from "@/components/ui/LeadNotice";
 import { MetaNotice } from "@/components/ui/MetaNotice";
 import { Card, ErrorBlock, KpiCard, KpiStrip, KpiTile, PageHeader, Skeleton, type Tone } from "@/components/ui/primitives";
 import { CATEGORIES } from "@/lib/categories";
 import { GoalButton } from "@/components/ui/GoalButton";
-import { fmtBRL, fmtCompact, fmtInt, fmtPct, fmtRange } from "@/lib/format";
+import { fmtBRL, fmtCompact, fmtInt, fmtPct, fmtRange, type FormatKind } from "@/lib/format";
 import { aggRate, categoryReport, journeySteps, profileHighlights, profileReport } from "@/lib/ga4/briefing";
 import { buildContext, type PageContext } from "@/lib/ga4/context";
 import { runFunnel } from "@/lib/ga4/funnel";
@@ -170,8 +171,36 @@ async function Headline({ page }: { page: PageContext }) {
   const changed = shift
     ? `A medição de compras mudou entre os períodos (compras sem origem: ${fmtPct(shift.prev.share, 0)} antes, ${fmtPct(shift.cur.share, 0)} agora). A variação não mede mudança real.`
     : undefined;
+  // CSV do bloco: um indicador por linha, com o período de comparação e a variação.
+  const kpis: { label: string; cur: number; prev?: number; unit: string }[] = [
+    { label: "Total de eventos", cur: cur.events, prev: prev?.events, unit: "número" },
+    { label: "Total de sessões", cur: cur.sessions, prev: prev?.sessions, unit: "número" },
+    { label: "Compras", cur: cur.purchases, prev: prev?.purchases, unit: "número" },
+    ...(hasLead ? [{ label: "Leads", cur: cur.leads, prev: prev?.leads, unit: "número" }] : []),
+    { label: "Usuários", cur: cur.users, prev: prev?.users, unit: "número" },
+    { label: "Taxa de engajamento", cur: cur.engagementRate, prev: prev?.engagementRate, unit: "fração (0 a 1)" },
+    { label: terms.conversion, cur: cur.conversion, prev: prev?.conversion, unit: "fração (0 a 1)" },
+    { label: terms.revenue, cur: cur.revenue, prev: prev?.revenue, unit: "R$" },
+    { label: terms.ticket, cur: cur.ticket, prev: prev?.ticket, unit: "R$" },
+  ];
   return (
-    <section className="space-y-4 2xl:space-y-5">
+    <CardFrame name="Indicadores do período" className="space-y-4 2xl:space-y-5">
+      <ExportData
+        table={{
+          columns: [
+            { key: "label", label: "Indicador", format: "text" },
+            { key: "cur", label: fmtRange(ctx.current), format: "decimal" },
+            ...(ctx.comparison
+              ? [
+                  { key: "prev", label: fmtRange(ctx.comparison), format: "decimal" as const },
+                  { key: "change", label: "Variação", format: "pct" as const },
+                ]
+              : []),
+            { key: "unit", label: "Unidade", format: "text" },
+          ],
+          rows: kpis.map((k) => ({ ...k, change: k.prev ? (k.cur - k.prev) / k.prev : null })),
+        }}
+      />
       <MetaNotice meta={meta} />
       {(terms.lead || hasLead) && <LeadCoverageNotice ctx={ctx} />}
       <div className="grid gap-4 sm:grid-cols-2 2xl:gap-5 min-[90rem]:grid-cols-4">
@@ -245,13 +274,14 @@ async function Headline({ page }: { page: PageContext }) {
           note={`${terms.ticket}: ${fmtBRL(cur.ticket, { compact: true })} · ${fmtInt(cur.transactions)} com ID de transação`}
         />
       </KpiStrip>
-      {ctx.comparison && (
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-xs text-muted">
-          Variações contra {compareWith(page.state)} ({fmtRange(ctx.comparison)}).
-          {changed && " Compras e valores marcados com “medição mudou” não são comparáveis entre os dois períodos."}
+          {ctx.comparison && <>Variações contra {compareWith(page.state)} ({fmtRange(ctx.comparison)}).</>}
+          {ctx.comparison && changed && " Compras e valores marcados com “medição mudou” não são comparáveis entre os dois períodos."}
         </p>
-      )}
-    </section>
+        <ExportMenu />
+      </div>
+    </CardFrame>
   );
 }
 
@@ -316,20 +346,23 @@ function PreviewCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <section className="refetch-dim flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
+    <CardFrame name={title} className="refetch-dim flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
       <header className="mb-4 flex items-start justify-between gap-3">
         <h2 className="text-[1.0625rem] leading-snug font-semibold text-ink">{title}</h2>
-        <Link
-          href={`${href}${serializeState(page.state)}`}
-          className="no-export inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-3 py-1 text-xs font-medium text-ink-2 hover:border-accent hover:text-accent"
-        >
-          Ver análise <ArrowRight size={12} aria-hidden />
-        </Link>
+        <div className="no-export flex shrink-0 items-center gap-1.5">
+          <Link
+            href={`${href}${serializeState(page.state)}`}
+            className="inline-flex h-8 items-center gap-1 rounded-full border border-line px-3 text-xs font-medium text-ink-2 hover:border-accent hover:text-accent"
+          >
+            Ver análise <ArrowRight size={12} aria-hidden />
+          </Link>
+          <ExportMenu />
+        </div>
       </header>
       {headline && <p className="mb-4 text-[0.8125rem] leading-relaxed text-ink-2">{headline}</p>}
       <div>{children}</div>
       {footer && <div className="mt-auto pt-4">{footer}</div>}
-    </section>
+    </CardFrame>
   );
 }
 
@@ -337,15 +370,29 @@ function PreviewCard({
 function MiniBars({
   rows,
   tone = "accent",
+  csv,
 }: {
-  rows: { label: string; value: number; text: string; sub?: string; ref?: number }[];
+  rows: { label: string; value: number; text: string; sub?: string; ref?: number; extra?: number | null }[];
   tone?: "accent" | "highlight";
+  /** Colunas do CSV do cartão: o valor da barra, a referência (traço) e um número extra de cada linha. */
+  csv: { label: string; value: string; format: FormatKind; ref?: string; extra?: { label: string; format: FormatKind } };
 }) {
   // A escala inclui as referências para o traço não passar do fim da barra. Valor acima de zero
   // ganha ao menos 1,5% de largura para não sumir.
   const max = Math.max(...rows.map((r) => r.value), ...rows.map((r) => r.ref ?? 0), 1e-9);
   return (
     <ul className="space-y-2.5">
+      <ExportData
+        table={{
+          columns: [
+            { key: "label", label: csv.label, format: "text" },
+            { key: "value", label: csv.value, format: csv.format },
+            ...(csv.ref ? [{ key: "ref", label: csv.ref, format: csv.format }] : []),
+            ...(csv.extra ? [{ key: "extra", label: csv.extra.label, format: csv.extra.format }] : []),
+          ],
+          rows: rows.map((r) => ({ label: r.label, value: r.value, ref: r.ref, extra: r.extra })),
+        }}
+      />
       {rows.map((r) => (
         <li key={r.label}>
           <div className="flex items-baseline justify-between gap-3 text-[0.8125rem]">
@@ -411,7 +458,14 @@ async function FunnelPreview({ page }: { page: PageContext }) {
       }
     >
       <MiniBars
-        rows={steps.map((s, i) => ({ label: `${i + 1}. ${s.label}`, value: s.users, text: fmtCompact(s.users), sub: i ? fmtPct(s.fromStart, 0) : undefined }))}
+        csv={{ label: "Etapa", value: "Usuários", format: "int", extra: { label: "% do início", format: "pct" } }}
+        rows={steps.map((s, i) => ({
+          label: `${i + 1}. ${s.label}`,
+          value: s.users,
+          text: fmtCompact(s.users),
+          sub: i ? fmtPct(s.fromStart, 0) : undefined,
+          extra: s.fromStart,
+        }))}
       />
     </PreviewCard>
   );
@@ -449,6 +503,7 @@ async function ProfilePreview({ page }: { page: PageContext }) {
       }
     >
       <MiniBars
+        csv={{ label: "Faixa etária", value: `% dos ${metric}`, format: "pct", ref: "% do público" }}
         rows={r.rows.map((x) => ({ label: x.label, value: share(x), ref: x.shareUsers, text: fmtPct(share(x), 0), sub: `dos ${metric}` }))}
       />
     </PreviewCard>
@@ -507,11 +562,13 @@ async function CampaignPreview({ page }: { page: PageContext }) {
       }
     >
       <MiniBars
+        csv={{ label: "Campanha", value: "Sessões", format: "int", extra: { label: terms.conversion, format: "pct" } }}
         rows={rows.map((x) => ({
           label: label(x.value),
           value: x.cur.sessions,
           text: fmtCompact(x.cur.sessions),
           sub: `${fmtPct(x.cur.conversion, 1)} ${terms.lead ? "lead" : "conv."}`,
+          extra: x.cur.conversion,
         }))}
       />
     </PreviewCard>
@@ -542,12 +599,14 @@ async function CategoryPreview({ page }: { page: PageContext }) {
       }
     >
       <MiniBars
+        csv={{ label: "Categoria", value: r.terms.conversion, format: "pct", ref: "Média do site", extra: { label: "Sessões", format: "int" } }}
         rows={cats.map((c) => ({
           label: c.key,
           value: aggRate(c),
           ref: r.total.conversion,
           text: fmtPct(aggRate(c)),
           sub: `${fmtCompact(c.sessions)} sessões`,
+          extra: c.sessions,
         }))}
       />
     </PreviewCard>
@@ -584,6 +643,16 @@ async function Insights({ page }: { page: PageContext }) {
       title="Alertas e insights"
       subtitle={`Regras sobre os dados do período, com volume mínimo para evitar ruído${summary ? ` · ${summary}` : ""}.`}
     >
+      <ExportData
+        table={{
+          columns: [
+            { key: "tone", label: "Tipo", format: "text" },
+            { key: "title", label: "Alerta", format: "text" },
+            { key: "text", label: "Detalhe", format: "text" },
+          ],
+          rows: res.data.map((i) => ({ tone: TONE_ICON[i.tone].label, title: i.title, text: i.text })),
+        }}
+      />
       {res.data.length === 0 ? (
         <p className="text-sm text-ink-2">Nenhum alerta relevante no período.</p>
       ) : (

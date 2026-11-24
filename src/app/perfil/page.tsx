@@ -27,7 +27,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
     <DashboardShell page={page} section="perfil">
       <PageHeader
         title="Perfil do usuário"
-        description="Quem visita e quem converte, por faixa etária e gênero. Quando a barra de leads ou de compras de um perfil passa a barra do público, esse perfil converte acima da média."
+        description="Quem visita e quem converte, por faixa etária, gênero e região. Quando a barra de leads ou de compras de um perfil passa a barra do público, esse perfil converte acima da média."
       />
       <Suspense fallback={<Skeleton className="h-[640px]" />}>
         <Profiles page={page} />
@@ -36,11 +36,15 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   );
 }
 
-/** Idade e gênero em paralelo, cada um falhando sozinho, mais o aviso de cobertura e as tabelas. */
+/** Regiões no gráfico; as demais ficam na tabela. */
+const REGION_CHART_ROWS = 12;
+
+/** Idade, gênero e região em paralelo, cada um falhando sozinho, mais o aviso de cobertura e as tabelas. */
 async function Profiles({ page }: { page: PageContext }) {
-  const [age, gender] = await Promise.all([
+  const [age, gender, region] = await Promise.all([
     settle(profileReport(page.ctx, "userAgeBracket")),
     settle(profileReport(page.ctx, "userGender")),
+    settle(profileReport(page.ctx, "region")),
   ]);
   const ref = age.ok ? age.data : gender.ok ? gender.data : null;
   // Poucas compras com perfil no período: busca o histórico de quando a compra ainda vinha com idade.
@@ -64,6 +68,13 @@ async function Profiles({ page }: { page: PageContext }) {
           </Card>
         )}
       </div>
+      {region.ok ? (
+        <ProfileChart report={region.data} title="Região" noun="região" limit={REGION_CHART_ROWS} />
+      ) : (
+        <Card title="Região">
+          <ErrorBlock message={region.error} />
+        </Card>
+      )}
       {needsHistory && (
         <Suspense fallback={<Skeleton className="h-80" />}>
           <PurchaseHistory page={page} />
@@ -71,6 +82,7 @@ async function Profiles({ page }: { page: PageContext }) {
       )}
       {age.ok && <ProfileTable report={age.data} title="Faixa etária em números" dimLabel="Faixa etária" file="perfil-idade" />}
       {gender.ok && <ProfileTable report={gender.data} title="Gênero em números" dimLabel="Gênero" file="perfil-genero" />}
+      {region.ok && <ProfileTable report={region.data} title="Região em números" dimLabel="Região" file="perfil-regiao" />}
     </div>
   );
 }
@@ -111,7 +123,7 @@ function profileSummary(report: ProfileReport, noun: string): string | null {
   const h = profileHighlights(report);
   if (!h) return null;
   const { metric, share, index, top, best } = h;
-  const who = noun === "faixa" ? "a faixa" : "o gênero";
+  const who = noun === "faixa" ? "a faixa" : noun === "região" ? "a região" : "o gênero";
   const times = `${index(best).toFixed(1).replace(".", ",")}x a média`;
   if (top.key === best.key) {
     return `${top.label} traz mais ${metric} e é ${who} que mais converte: ${fmtPct(share(top), 0)} dos ${metric} com ${fmtPct(top.shareUsers, 0)} do público (${times}).`;
@@ -123,25 +135,35 @@ function profileSummary(report: ProfileReport, noun: string): string | null {
 }
 
 /** Barras de participação no público, nos leads e, com compras suficientes, nas compras. */
-function ProfileChart({ report, title, noun }: { report: ProfileReport; title: string; noun: string }) {
+function ProfileChart({
+  report,
+  title,
+  noun,
+  limit,
+}: {
+  report: ProfileReport;
+  title: string;
+  noun: string;
+  /** Mostra só os N perfis com mais usuários (região tem dezenas); a tabela traz todos. */
+  limit?: number;
+}) {
   const knownPurchases = report.total.purchases - report.unknown.purchases;
-  const series: CompareSeries[] = [{ label: "% dos usuários", color: "compare", values: report.rows.map((r) => r.shareUsers) }];
-  if (report.hasLead) series.push({ label: "% dos leads", color: "accent", values: report.rows.map((r) => r.shareLeads) });
+  const rows = limit ? report.rows.slice(0, limit) : report.rows;
+  const series: CompareSeries[] = [{ label: "% dos usuários", color: "compare", values: rows.map((r) => r.shareUsers) }];
+  if (report.hasLead) series.push({ label: "% dos leads", color: "accent", values: rows.map((r) => r.shareLeads) });
   if (knownPurchases >= MIN_PURCHASES) {
-    series.push({ label: "% das compras", color: "highlight", values: report.rows.map((r) => r.sharePurchases) });
+    series.push({ label: "% das compras", color: "highlight", values: rows.map((r) => r.sharePurchases) });
   }
-  const subtitle =
+  const summary =
     profileSummary(report, noun) ?? "Participação de cada perfil no público e na conversão, só entre quem tem o perfil identificado.";
+  const subtitle =
+    limit && report.rows.length > limit ? `${summary} No gráfico, as ${limit} com mais usuários; a tabela abaixo traz todas.` : summary;
   return (
     <Card title={title} subtitle={subtitle}>
-      {report.rows.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="text-sm text-ink-2">Sem usuários com {noun} identificado no período.</p>
       ) : (
-        <ShareCompare
-          categories={report.rows.map((r) => r.label)}
-          series={series}
-          ariaLabel={`Participação por ${title.toLowerCase()}`}
-        />
+        <ShareCompare categories={rows.map((r) => r.label)} series={series} ariaLabel={`Participação por ${title.toLowerCase()}`} />
       )}
     </Card>
   );

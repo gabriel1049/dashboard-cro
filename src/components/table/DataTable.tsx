@@ -16,7 +16,9 @@ import { useMemo, useState } from "react";
 
 import { useDashboardNav } from "@/components/shell/PendingProvider";
 import { useStateHref } from "@/components/shell/useStateHref";
+import { ExportData, useInExportCard } from "@/components/ui/CardExport";
 import { Badge, Delta, type Better, type Tone } from "@/components/ui/primitives";
+import { downloadCsv, type CsvTable } from "@/lib/csv";
 import { formatValue, type FormatKind } from "@/lib/format";
 import type { FilterKey } from "@/lib/state";
 
@@ -72,6 +74,9 @@ export function DataTable({
   const { state, hrefFor } = useStateHref();
   const { navigate } = useDashboardNav();
   const hasFlags = rows.some((r) => r.flags?.length);
+  // Dentro de um cartão, o CSV sai pelo "Exportar" do cartão; solta na página, a tabela tem o próprio botão.
+  const inCard = useInExportCard();
+  const csv = useMemo(() => csvTable(columns, rows), [columns, rows]);
 
   const maxByKey = useMemo(() => {
     const out: Record<string, number> = {};
@@ -178,7 +183,12 @@ export function DataTable({
   return (
     // Tabela estreita (poucas colunas) não se espalha pela tela inteira em monitores largos.
     <div className={clsx(columns.length <= 4 && "max-w-[64rem]")}>
-      <div className="no-export mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div
+        className={clsx(
+          "no-export flex flex-wrap items-center justify-between gap-2",
+          !(inCard && !(searchable && rows.length > pageSize)) && "mb-3",
+        )}
+      >
         {searchable && rows.length > pageSize ? (
           <label className="relative">
             <Search size={14} aria-hidden className="absolute top-1/2 left-3.5 -translate-y-1/2 text-muted" />
@@ -193,13 +203,17 @@ export function DataTable({
         ) : (
           <span />
         )}
-        <button
-          type="button"
-          onClick={() => downloadCsv(filename, columns, rows)}
-          className="flex h-8 items-center gap-1.5 rounded-full px-3 text-sm text-ink-2 hover:bg-raised hover:text-ink"
-        >
-          <Download size={14} aria-hidden /> CSV
-        </button>
+        {inCard ? (
+          <ExportData table={csv} />
+        ) : (
+          <button
+            type="button"
+            onClick={() => downloadCsv(filename, [csv])}
+            className="flex h-8 items-center gap-1.5 rounded-full px-3 text-sm text-ink-2 hover:bg-raised hover:text-ink"
+          >
+            <Download size={14} aria-hidden /> CSV
+          </button>
+        )}
       </div>
 
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -293,38 +307,26 @@ export function DataTable({
   );
 }
 
-/** CSV no padrão do Excel brasileiro: separador ";", vírgula decimal e BOM UTF-8. */
-function downloadCsv(filename: string, columns: ColumnSpec[], rows: TableRow[]) {
-  // Casas decimais por formato: tira o ruído de ponto flutuante que o GA4 devolve (ex.: 13489000,000014).
-  const PLACES: Record<string, number> = { int: 0, brl: 2, duration: 1, decimal: 4, pct: 6 };
-  const num = (v: unknown, format?: string) => {
-    if (typeof v !== "number" || !Number.isFinite(v)) return "";
-    const f = 10 ** (PLACES[format ?? "decimal"] ?? 4);
-    return String(Math.round(v * f) / f).replace(".", ",");
-  };
-  const esc = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const header: string[] = [];
+/** Dados da tabela para o CSV: cada coluna com variação ganha a coluna da comparação ao lado. */
+function csvTable(columns: ColumnSpec[], rows: TableRow[]): CsvTable {
+  const cols: CsvTable["columns"] = [];
   for (const c of columns) {
-    header.push(c.label);
-    if (c.delta) header.push(`${c.label} (comparação)`);
+    cols.push({ key: c.key, label: c.label, format: c.type === "dim" ? "text" : (c.format ?? "decimal") });
+    if (c.delta) cols.push({ key: `${c.key}__prev`, label: `${c.label} (comparação)`, format: c.format ?? "decimal" });
   }
-  if (rows.some((r) => r.flags?.length)) header.push("Alertas");
-  const lines = [header.map(esc).join(";")];
-  for (const r of rows) {
-    const cells: string[] = [];
-    for (const c of columns) {
-      const v = r.values[c.key];
-      cells.push(c.type === "dim" ? esc(String(v ?? "")) : num(v, c.format));
-      if (c.delta) cells.push(num(r.prev?.[c.key], c.format));
-    }
-    if (header.at(-1) === "Alertas") cells.push(esc((r.flags ?? []).map((f) => f.label).join(" | ")));
-    lines.push(cells.join(";"));
-  }
-  const blob = new Blob([`﻿${lines.join("\r\n")}`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const flags = rows.some((r) => r.flags?.length);
+  if (flags) cols.push({ key: "__flags", label: "Alertas", format: "text" });
+  return {
+    columns: cols,
+    rows: rows.map((r) => {
+      const out: CsvTable["rows"][number] = {};
+      for (const c of columns) {
+        const v = r.values[c.key];
+        out[c.key] = c.type === "dim" ? String(v ?? "") : v;
+        if (c.delta) out[`${c.key}__prev`] = r.prev?.[c.key];
+      }
+      if (flags) out.__flags = (r.flags ?? []).map((f) => f.label).join(" | ");
+      return out;
+    }),
+  };
 }

@@ -3,46 +3,70 @@ import { ArrowDown, ArrowUp, CircleCheck, CircleExclamationPoint, Info, Minus, O
 
 import { fmtSignedPct, formatValue, relChange, type FormatKind } from "@/lib/format";
 
+import { CardFrame, ExportMenu } from "./CardExport";
+
+/**
+ * Cartão do painel. Com título, ganha o botão "Exportar" (CSV dos dados ou PDF só deste cartão);
+ * `exportName` dá o nome do arquivo quando o título não é texto puro.
+ */
 export function Card({
   title,
   subtitle,
   actions,
   children,
   className,
+  exportName,
+  exportable = true,
 }: {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  exportName?: string;
+  exportable?: boolean;
 }) {
+  const canExport = exportable && Boolean(title);
   return (
-    <section className={clsx("refetch-dim min-w-0 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6 2xl:p-7", className)}>
-      {(title || actions) && <CardHeader title={title} subtitle={subtitle} actions={actions} />}
+    <CardFrame
+      name={exportName ?? (typeof title === "string" ? title : undefined)}
+      className={clsx("refetch-dim min-w-0 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6 2xl:p-7", className)}
+    >
+      {(title || actions) && (
+        <CardHeader title={title} subtitle={subtitle} actions={actions} menu={canExport ? <ExportMenu /> : undefined} />
+      )}
       {children}
-    </section>
+    </CardFrame>
   );
 }
 
-/** Título de bloco (com ou sem cartão em volta): título à esquerda, ação discreta à direita. */
+/**
+ * Título de bloco (com ou sem cartão em volta): título à esquerda, ações à direita (descem quando
+ * não cabem) e o menu de exportação sempre no canto superior direito.
+ */
 export function CardHeader({
   title,
   subtitle,
   actions,
+  menu,
   className,
 }: {
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
+  menu?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <header className={clsx("mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-2", className)}>
-      <div className="min-w-0">
-        {title && <h2 className="text-[1.0625rem] leading-snug font-semibold text-ink">{title}</h2>}
-        {subtitle && <p className="mt-1 max-w-[110ch] text-[0.8125rem] leading-relaxed text-muted">{subtitle}</p>}
+    <header className={clsx("mb-5 flex items-start gap-x-4", className)}>
+      <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          {title && <h2 className="text-[1.0625rem] leading-snug font-semibold text-ink">{title}</h2>}
+          {subtitle && <p className="mt-1 max-w-[110ch] text-[0.8125rem] leading-relaxed text-muted">{subtitle}</p>}
+        </div>
+        {actions && <div className="no-export flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="no-export flex flex-wrap items-center gap-2">{actions}</div>}
+      {menu && <div className="no-export shrink-0">{menu}</div>}
     </header>
   );
 }

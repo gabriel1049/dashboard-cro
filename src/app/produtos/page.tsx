@@ -15,7 +15,7 @@ import { runReport, settle } from "@/lib/ga4/report";
 import type { SearchParams } from "@/lib/state";
 
 // Métricas de item do e-commerce do GA4; só entram as que a propriedade tem.
-const ITEM_METRICS = ["itemsViewed", "itemsAddedToCart", "itemsPurchased", "itemRevenue", "cartToViewRate", "purchaseToViewRate"];
+const ITEM_METRICS = ["itemsViewed", "itemsCheckedOut", "itemsPurchased", "itemRevenue"];
 
 /** Mediana dos valores acima de zero, para item sem volume não puxar a referência para baixo. */
 const median = (xs: number[]) => {
@@ -24,8 +24,9 @@ const median = (xs: number[]) => {
 };
 
 /**
- * Produtos: visualizações, carrinho e compras por item (métricas de e-commerce do GA4), com alerta
- * para item muito visto e pouco adicionado, ou muito adicionado e pouco comprado.
+ * Produtos: visualizações, checkouts e compras por item (métricas de e-commerce do GA4), com alerta
+ * para item muito visto e pouco levado ao checkout. Sem adição ao carrinho, que não existe na
+ * jornada do consórcio: o plano vai da visualização direto para o checkout.
  */
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const sp = await searchParams;
@@ -38,7 +39,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     <DashboardShell page={page} section="produtos">
       <PageHeader
         title="Produtos"
-        description="Visualizações, adições ao carrinho e compras por item. Destaca itens muito vistos e pouco adicionados, e itens muito adicionados e pouco comprados."
+        description="Visualizações, checkouts e compras por item. Destaca os itens muito vistos e pouco levados ao checkout."
       />
       <Suspense fallback={<Skeleton className="h-[600px]" />}>
         <ProductBlock page={page} dim={dim} dims={dims} metrics={metrics} />
@@ -47,7 +48,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-/** Matriz visualização x carrinho e a tabela por item, na dimensão escolhida em ?dim. */
+/** Matriz visualização x checkout e a tabela por item, na dimensão escolhida em ?dim. */
 async function ProductBlock({
   page,
   dim,
@@ -72,46 +73,39 @@ async function ProductBlock({
     );
   }
   const t = res.data.totals.cur;
-  const avgCart = t.itemsViewed ? (t.itemsAddedToCart ?? 0) / t.itemsViewed : 0;
-  const avgBuy = t.itemsAddedToCart ? (t.itemsPurchased ?? 0) / t.itemsAddedToCart : 0;
+  const avgCheckout = t.itemsViewed ? (t.itemsCheckedOut ?? 0) / t.itemsViewed : 0;
   const medViews = median(res.data.rows.map((r) => r.cur.itemsViewed ?? 0));
-  const medCart = median(res.data.rows.map((r) => r.cur.itemsAddedToCart ?? 0));
   let impossible = 0;
+  // Compras em itens que nunca aparecem visualizados: o purchase usa outros nomes de item.
+  const orphanPurchases = res.data.rows
+    .filter((r) => !(r.cur.itemsViewed ?? 0))
+    .reduce((n, r) => n + (r.cur.itemsPurchased ?? 0), 0);
+  const orphanShare = t.itemsPurchased ? orphanPurchases / t.itemsPurchased : 0;
+  const orphanNames = res.data.rows
+    .filter((r) => !(r.cur.itemsViewed ?? 0) && (r.cur.itemsPurchased ?? 0) > 0)
+    .slice(0, 3)
+    .map((r) => r.dims[dim.id]);
 
   const rows: TableRow[] = res.data.rows.map((r) => {
     const v = r.cur;
     const views = v.itemsViewed ?? 0;
-    const cart = v.itemsAddedToCart ?? 0;
+    const checkout = v.itemsCheckedOut ?? 0;
     const bought = v.itemsPurchased ?? 0;
-    const cartRate = views ? cart / views : null;
-    const buyRate = cart ? bought / cart : null;
+    const checkoutRate = views ? checkout / views : null;
     const flags: TableRow["flags"] = [];
-    // Taxa acima de 100% é erro de tracking e dispensa o alerta de "pouco adicionado". Os outros
-    // alertas pedem volume (mediana e um piso) e taxa abaixo da metade da média.
-    if (cartRate !== null && cartRate > 1) {
+    // Taxa acima de 100% é erro de tracking e dispensa o alerta. O outro alerta pede volume
+    // (mediana e um piso) e taxa abaixo da metade da média.
+    if (checkoutRate !== null && checkoutRate > 1) {
       impossible++;
-      flags.push({ label: "Mais carrinho que visualização: verificar tracking", tone: "warning" });
-    } else if (views >= medViews && views >= 50 && cartRate !== null && cartRate < avgCart * 0.5) {
-      flags.push({ label: "Muito visto, pouco adicionado", tone: "critical" });
+      flags.push({ label: "Mais checkout que visualização: verificar tracking", tone: "warning" });
+    } else if (views >= medViews && views >= 50 && checkoutRate !== null && checkoutRate < avgCheckout * 0.5) {
+      flags.push({ label: "Muito visto, pouco checkout", tone: "critical" });
     }
-    if (cart >= medCart && cart >= 30 && buyRate !== null && buyRate < avgBuy * 0.5) {
-      flags.push({ label: "Muito adicionado, pouco comprado", tone: "critical" });
-    }
-    // Usa as taxas do GA4 quando a propriedade tem as métricas; senão, calcula pelas contagens.
     return {
       id: r.key,
-      values: {
-        item: r.dims[dim.id],
-        views,
-        cart,
-        bought,
-        revenue: v.itemRevenue ?? 0,
-        cartRate: v.cartToViewRate ?? cartRate,
-        buyRate,
-        purchaseToView: v.purchaseToViewRate ?? (views ? bought / views : null),
-      },
+      values: { item: r.dims[dim.id], views, checkout, bought, revenue: v.itemRevenue ?? 0, checkoutRate },
       prev: r.prev
-        ? { views: r.prev.itemsViewed, cart: r.prev.itemsAddedToCart, bought: r.prev.itemsPurchased, revenue: r.prev.itemRevenue }
+        ? { views: r.prev.itemsViewed, checkout: r.prev.itemsCheckedOut, bought: r.prev.itemsPurchased, revenue: r.prev.itemRevenue }
         : undefined,
       flags,
     };
@@ -120,16 +114,23 @@ async function ProductBlock({
   return (
     <div className="space-y-5">
       <MetaNotice meta={res.data.meta} />
+      {orphanShare >= 0.5 && (
+        <Notice tone="warning" title="A compra usa outros nomes de item">
+          {fmtPct(orphanShare, 0)} dos itens comprados não aparecem em nenhuma visualização (ex.: {orphanNames.join(", ")}). O purchase
+          manda o tipo de plano no lugar do produto visto, então a compra por item não se liga à visualização. Por isso a matriz
+          compara visualização com checkout, que usa os mesmos nomes. Vale padronizar item_name e item_id no purchase.
+        </Notice>
+      )}
       {impossible > 0 && (
         <Notice tone="warning" title="Taxas acima de 100%">
-          {impossible} {impossible === 1 ? "item tem" : "itens têm"} mais adições ao carrinho do que visualizações. Isso costuma
-          acontecer quando o mesmo produto tem nomes diferentes em cada evento (ex.: um nome no view_item e outro no
-          add_to_cart) ou quando o carrinho é disparado sem passar pela página do item. Vale padronizar item_name e item_id.
+          {impossible} {impossible === 1 ? "item tem" : "itens têm"} mais checkouts do que visualizações. Isso costuma acontecer
+          quando o mesmo produto tem nomes diferentes em cada evento (ex.: um nome no view_item e outro no begin_checkout) ou
+          quando o checkout é disparado sem passar pela página do item. Vale padronizar item_name e item_id.
         </Notice>
       )}
       <Card
-        title="Visualização x adição ao carrinho"
-        subtitle={`Média: ${fmtPct(avgCart)} das visualizações viram carrinho e ${fmtPct(avgBuy)} dos carrinhos viram compra.${
+        title="Visualização x checkout"
+        subtitle={`Média: ${fmtPct(avgCheckout)} das visualizações viram checkout.${
           impossible ? ` ${impossible} ${impossible === 1 ? "item com taxa acima de 100% fica" : "itens com taxa acima de 100% ficam"} fora do gráfico.` : ""
         }`}
         actions={tabs}
@@ -137,19 +138,19 @@ async function ProductBlock({
         <OpportunityMatrix
           points={rows
             // Taxas acima de 100% são erro de tracking (avisado acima) e achatariam o gráfico.
-            .filter((r) => (r.values.views as number) > 0 && ((r.values.cartRate as number | null) ?? 0) <= 1)
+            .filter((r) => (r.values.views as number) > 0 && ((r.values.checkoutRate as number | null) ?? 0) <= 1)
             .map((r) => ({
               name: String(r.values.item),
               x: r.values.views as number,
-              y: (r.values.cartRate as number) ?? 0,
+              y: (r.values.checkoutRate as number) ?? 0,
               flagged: Boolean(r.flags?.some((f) => f.tone === "critical")),
             }))}
           xLabel="Visualizações do item"
-          yLabel="Carrinho ÷ visualização"
+          yLabel="Checkout ÷ visualização"
           xFormat="int"
           yFormat="pct"
-          yRef={avgCart}
-          flaggedLabel="Muito visto, pouco adicionado / pouco comprado"
+          yRef={avgCheckout}
+          flaggedLabel="Muito visto, pouco checkout"
         />
       </Card>
       <Card title={`Desempenho por ${dim.label.toLowerCase()}`}>
@@ -159,12 +160,10 @@ async function ProductBlock({
           columns={[
             { key: "item", label: dim.label, type: "dim" },
             { key: "views", label: "Visualizações", type: "metric", format: "int", bar: true, delta: true },
-            { key: "cart", label: "Adições ao carrinho", type: "metric", format: "int", delta: true },
+            { key: "checkout", label: "Checkouts", type: "metric", format: "int", delta: true, help: "itemsCheckedOut" },
+            { key: "checkoutRate", label: "Checkout ÷ visualização", type: "metric", format: "pct" },
             { key: "bought", label: "Compras", type: "metric", format: "int", delta: true },
             { key: "revenue", label: terms.revenue, type: "metric", format: "brl" },
-            { key: "cartRate", label: "Carrinho ÷ visualização", type: "metric", format: "pct", help: "cartToViewRate" },
-            { key: "buyRate", label: "Compra ÷ carrinho", type: "metric", format: "pct" },
-            { key: "purchaseToView", label: "Compra ÷ visualização", type: "metric", format: "pct", help: "purchaseToViewRate" },
           ]}
           rows={rows}
         />

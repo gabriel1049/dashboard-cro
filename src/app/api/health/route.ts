@@ -25,7 +25,7 @@ export async function GET() {
       ctx,
       [
         { label: "Ver plano", event: "view_item" },
-        { label: "Carrinho", event: "add_to_cart" },
+        { label: "Checkout", event: "begin_checkout" },
         { label: "Compra", event: "purchase" },
       ],
       { breakdown: "platform" },

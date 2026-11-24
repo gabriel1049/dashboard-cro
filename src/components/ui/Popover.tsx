@@ -2,7 +2,10 @@
 
 import clsx from "clsx";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+
+/** Como o painel fechou: botão de novo, clique fora, Esc ou uma ação de dentro (close). */
+export type CloseReason = "toggle" | "outside" | "escape" | "close";
 
 /** Botão com painel suspenso; fecha com clique fora ou Esc. */
 export function Popover({
@@ -22,16 +25,22 @@ export function Popover({
   align?: "left" | "right";
   width?: number;
   open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean, reason?: CloseReason) => void;
   /** Substitui o estilo padrão do botão (ex.: dentro de um grupo de pílulas). */
   buttonClassName?: string;
   showChevron?: boolean;
 }) {
   const [innerOpen, setInnerOpen] = useState(false);
   const open = controlledOpen ?? innerOpen;
-  const setOpen = (v: boolean) => {
+  // O clique fora é ouvido por um efeito criado ao abrir: o ref garante que ele chame o onOpenChange
+  // mais recente (com as marcações atuais de quem usa o Popover), não o daquele momento.
+  const changeRef = useRef(onOpenChange);
+  useLayoutEffect(() => {
+    changeRef.current = onOpenChange;
+  });
+  const setOpen = (v: boolean, reason?: CloseReason) => {
     setInnerOpen(v);
-    onOpenChange?.(v);
+    changeRef.current?.(v, v ? undefined : reason);
   };
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
@@ -39,9 +48,9 @@ export function Popover({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      if (!ref.current?.contains(e.target as Node)) setOpen(false, "outside");
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false, "escape");
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -51,7 +60,7 @@ export function Popover({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const close = () => setOpen(false);
+  const close = () => setOpen(false, "close");
 
   return (
     <div ref={ref} className="relative">
@@ -59,7 +68,7 @@ export function Popover({
         type="button"
         aria-expanded={open}
         aria-controls={id}
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen(!open, "toggle")}
         className={
           buttonClassName ??
           clsx(

@@ -4,10 +4,12 @@
  */
 import type { FunnelStepDef } from "@/lib/ga4/funnel";
 
-/** Funil padrão de e-commerce do GA4 (etapas sem volume na propriedade são removidas). */
+/**
+ * Funil padrão de e-commerce do GA4 (etapas sem volume na propriedade são removidas). Sem a etapa
+ * de carrinho, que não existe na jornada do consórcio (o plano vai direto para o checkout).
+ */
 export const ECOMMERCE_FUNNEL: FunnelStepDef[] = [
   { label: "Ver item", event: "view_item" },
-  { label: "Adicionar ao carrinho", event: "add_to_cart" },
   { label: "Iniciar checkout", event: "begin_checkout" },
   { label: "Informar entrega", event: "add_shipping_info" },
   { label: "Informar pagamento", event: "add_payment_info" },

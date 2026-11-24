@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import { formatValue, type FormatKind } from "@/lib/format";
+import { ExportData } from "@/components/ui/CardExport";
 
 import { axisStyle, baseOption, EChart, tooltipRows, useChartTheme, type ChartTheme } from "./EChart";
 import { LegendKey } from "./TimeSeriesChart";
@@ -42,6 +43,14 @@ export function ShareCompare({
   note?: string;
 }) {
   const t = useChartTheme();
+  const csv = useMemo(
+    () => ({
+      title: ariaLabel,
+      columns: [{ key: "cat", label: "Categoria", format: "text" as const }, ...series.map((s, i) => ({ key: `s${i}`, label: s.label, format }))],
+      rows: categories.map((c, j) => ({ cat: c, ...Object.fromEntries(series.map((s, i) => [`s${i}`, s.values[j]])) })),
+    }),
+    [ariaLabel, categories, series, format],
+  );
   const option = useMemo(() => {
     if (!t) return null;
     const ax = axisStyle(t);
@@ -95,6 +104,7 @@ export function ShareCompare({
   const rowHeight = series.length * 18 + 22;
   return (
     <div>
+      <ExportData table={csv} />
       <EChart option={option} height={categories.length * rowHeight + 16} ariaLabel={ariaLabel} />
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-ink-2">
         {series.map((s) => (

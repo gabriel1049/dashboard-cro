@@ -213,6 +213,11 @@ h1 {
 }
 
 @media print {
+  /* Sem isso o navegador corta os fundos: somem as barras em HTML e as células do mapa de calor. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .no-print {
     display: none !important;
   }

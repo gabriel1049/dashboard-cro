@@ -50,6 +50,7 @@ export const FILTERS = [
   { key: "origem", dimension: "sessionSourceMedium", label: "Origem / mídia" },
   { key: "campanha", dimension: "sessionCampaignName", label: "Campanha" },
   { key: "pais", dimension: "country", label: "País" },
+  { key: "regiao", dimension: "region", label: "Região" },
   { key: "versao", dimension: "appVersion", label: "Versão do app" },
 ] as const;
 

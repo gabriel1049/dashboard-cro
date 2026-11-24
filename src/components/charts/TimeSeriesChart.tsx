@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useMemo, useState } from "react";
 
 import { fmtDay, formatValue, type FormatKind } from "@/lib/format";
+import { ExportData } from "@/components/ui/CardExport";
 
 import { axisStyle, baseOption, EChart, tooltipRows, useChartTheme } from "./EChart";
 
@@ -96,6 +97,20 @@ export function TimeSeriesChart({
   const points = useMemo(() => aggregate(rawPoints, metrics, grain), [rawPoints, metrics, grain]);
   const prevPoints = useMemo(() => (rawPrev ? aggregate(rawPrev, metrics, grain) : undefined), [rawPrev, metrics, grain]);
   const unit = grain === "day" ? "Dia" : grain === "week" ? "Semana" : "Mês";
+  // CSV: a série no agrupamento escolhido (dia, semana ou mês), com todas as métricas e, havendo, o período de comparação.
+  const csv = useMemo(() => {
+    const iso = (d: string) => `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+    const lines = (label: string, pts: SeriesPoint[]) =>
+      pts.map((p) => ({ periodo: label, date: iso(p.date), ...Object.fromEntries(shown.map((m) => [m.key, p.values[m.key]])) }));
+    return {
+      columns: [
+        { key: "periodo", label: "Período", format: "text" as const },
+        { key: "date", label: grain === "day" ? "Data" : `${unit} (início)`, format: "text" as const },
+        ...shown.map((m) => ({ key: m.key, label: m.label, format: m.format })),
+      ],
+      rows: [...lines(currentLabel, points), ...(prevPoints ? lines(prevLabel ?? "Comparação", prevPoints) : [])],
+    };
+  }, [shown, points, prevPoints, grain, unit, currentLabel, prevLabel]);
 
   const option = useMemo(() => {
     if (!t || !metric) return null;
@@ -166,6 +181,13 @@ export function TimeSeriesChart({
 
   return (
     <div>
+      <ExportData table={csv} />
+      {/* As abas não vão para o PDF e o HTML: no lugar delas, o nome da métrica e do agrupamento. */}
+      {metric && (
+        <p className="export-only mb-3 text-sm font-semibold text-ink">
+          {metric.label} por {unit.toLowerCase()}
+        </p>
+      )}
       <div className="no-export mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-rule">
         <div role="tablist" aria-label="Métrica" className="-mb-px flex flex-wrap gap-x-5">
           {shown.map((m) => (

@@ -7,6 +7,8 @@ import { Fragment, useMemo, useState } from "react";
 import { useDashboardNav } from "@/components/shell/PendingProvider";
 import { useStateHref } from "@/components/shell/useStateHref";
 import { Delta, type Better } from "@/components/ui/primitives";
+import { ExportData } from "@/components/ui/CardExport";
+import type { CsvTable } from "@/lib/csv";
 import { formatValue, type FormatKind } from "@/lib/format";
 import type { FilterKey } from "@/lib/state";
 
@@ -67,6 +69,26 @@ export function GroupedTable({
     return out;
   }, [groups, metrics]);
   const shown = all ? groups : groups.slice(0, PAGE);
+  // CSV: uma linha por grupo e, abaixo, uma por item do detalhe (todos, abertos ou não).
+  const csv = useMemo<CsvTable>(() => {
+    const cols: CsvTable["columns"] = [
+      { key: "group", label: groupLabel, format: "text" },
+      { key: "detail", label: detailLabel, format: "text" },
+    ];
+    for (const m of metrics) {
+      cols.push({ key: m.key, label: m.label, format: m.format });
+      if (m.delta) cols.push({ key: `${m.key}__prev`, label: `${m.label} (comparação)`, format: m.format });
+    }
+    const line = (g: GroupNode, n: GroupNode, child: boolean) => {
+      const out: CsvTable["rows"][number] = { group: g.label, detail: child ? n.label : "(total do grupo)" };
+      for (const m of metrics) {
+        out[m.key] = n.values[m.key];
+        if (m.delta) out[`${m.key}__prev`] = n.prev?.[m.key];
+      }
+      return out;
+    };
+    return { columns: cols, rows: groups.flatMap((g) => [line(g, g, false), ...(g.children ?? []).map((c) => line(g, c, true))]) };
+  }, [groups, metrics, groupLabel, detailLabel]);
   const toggle = (id: string) =>
     setOpen((s) => {
       const n = new Set(s);
@@ -98,6 +120,7 @@ export function GroupedTable({
 
   return (
     <div>
+      <ExportData table={csv} />
       <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <table className="w-full min-w-max text-sm tabular">
           <thead>

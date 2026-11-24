@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { authMode } from "@/lib/auth";
 import { fmtRange } from "@/lib/format";
 import { getFilterOptions, type PageContext } from "@/lib/ga4/context";
+import { regionLabel } from "@/lib/regions";
 import { leadAvailable } from "@/lib/ga4/kpis";
 import { compareLabel, FILTERS } from "@/lib/state";
 
@@ -40,7 +41,7 @@ export async function DashboardShell({
     leadAvailable(ctx.propertyId).catch(() => false),
   ]);
   const activeFilters = FILTERS.filter((f) => state.filters[f.key]?.length).map(
-    (f) => `${f.label}: ${state.filters[f.key]!.join(", ")}`,
+    (f) => `${f.label}: ${state.filters[f.key]!.map((v) => (f.key === "regiao" ? regionLabel(v) : v)).join(", ")}`,
   );
   const exportName = `cro-${section}-${ctx.current.start}_${ctx.current.end}`;
 
@@ -60,6 +61,9 @@ export async function DashboardShell({
           <div className="mt-auto px-3 pt-6 text-xs leading-relaxed text-muted">
             <p className="font-medium text-ink-2">{propertyLabel}</p>
             <p>Google Analytics 4, somente leitura</p>
+            <p className="mt-2" title="Os períodos terminam ontem. O GA4 pode revisar os números dos dois últimos dias enquanto termina de processar.">
+              Dados até ontem, renovados a cada 20 min
+            </p>
           </div>
         </aside>
 
@@ -95,7 +99,8 @@ export async function DashboardShell({
             </div>
           </header>
 
-          <main className={`sheet flex min-w-0 flex-col pb-16 ${PAD}`}>
+          {/* data-export-base: começo do nome dos arquivos que cada cartão exporta (seção e período). */}
+          <main data-export-base={exportName} className={`sheet flex min-w-0 flex-col pb-16 ${PAD}`}>
             {/* order-[-1]: a barra fica logo abaixo do PageHeader (order-first), que chega dentro de children. */}
             <div className="no-export no-print sticky top-16 z-20 order-[-1] mb-6 bg-frame py-3 lg:top-0">
               <Suspense>

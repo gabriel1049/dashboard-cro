@@ -48,7 +48,7 @@ export type FilterOptions = Partial<Record<FilterKey, string[]>>;
 
 /** Valores disponíveis para cada filtro global (últimos 90 dias, sem filtros aplicados). */
 export function getFilterOptions(ctx: QueryContext): Promise<FilterOptions> {
-  return cached(`options2:${ctx.propertyId}:${ctx.today}`, 3 * 3600_000, async () => {
+  return cached(`options3:${ctx.propertyId}:${ctx.today}`, 3 * 3600_000, async () => {
     const range = { start: addDays(ctx.today, -90), end: addDays(ctx.today, -1) };
     const entries = await Promise.all(
       FILTERS.map(async (f) => {

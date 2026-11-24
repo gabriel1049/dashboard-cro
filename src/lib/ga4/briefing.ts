@@ -3,6 +3,7 @@ import "server-only";
 import { JOURNEY } from "@/config/cro";
 
 import { CATEGORIES, classifyPage, isLandingPath, PAGE_TYPES, type Category, type PageType } from "../categories";
+import { regionLabel } from "../regions";
 import { addDays, type Range } from "../state";
 import { cached } from "./cache";
 import type { FunnelStepDef } from "./funnel";
@@ -119,13 +120,14 @@ export type ProfileReport = {
 };
 
 /**
- * Faixa etária ou gênero cruzado com compras (e leads, quando o lead é evento-chave).
+ * Faixa etária, gênero ou região cruzados com compras (e leads, quando o lead é evento-chave).
  * Os dados demográficos vêm do Google Signals: o GA4 aplica limite (thresholding) e muita
- * gente fica em "unknown". As participações são calculadas só entre quem tem a faixa.
+ * gente fica em "unknown". A região vem do IP e cobre quase todos os usuários; a compra enviada
+ * pelo servidor chega sem ela. As participações são calculadas só entre quem tem o perfil.
  */
 export async function profileReport(
   ctx: QueryContext,
-  dimension: "userAgeBracket" | "userGender",
+  dimension: "userAgeBracket" | "userGender" | "region",
   opts: { range?: Range } = {},
 ): Promise<ProfileReport> {
   const hasLead = await leadAvailable(ctx.propertyId).catch(() => false);
@@ -161,7 +163,7 @@ export async function profileReport(
       const p = x.prev ? val(x.prev) : undefined;
       return {
         key,
-        label: dimension === "userGender" ? (GENDER_LABELS[key] ?? key) : key,
+        label: dimension === "userGender" ? (GENDER_LABELS[key] ?? key) : dimension === "region" ? regionLabel(key) : key,
         users: c.users,
         sessions: c.sessions,
         purchases: c.purchases,

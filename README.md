@@ -15,12 +15,16 @@ Painel web de CRO que substitui o Looker Studio. Lê os dados direto da Google A
 | `/tecnologia` | Conversão, abandono de checkout e erros por dispositivo, SO, versão, aparelho; marca combinações com cara de bug |
 | `/paginas` | Site: páginas de entrada com matriz de oportunidade. App: telas, com matriz de erros por tela |
 | `/canais` | Canal, origem/mídia e campanha: participação nas sessões x nas compras (ou nos leads) e tabela completa |
-| `/produtos` | Itens vistos, adicionados e comprados, com alertas de "muito visto, pouco adicionado" |
-| `/perfil` | Idade e gênero: participação no público x nos leads ou compras, com o índice de conversão de cada faixa |
+| `/produtos` | Itens vistos e comprados, com alerta de "muito visto, pouco comprado" |
+| `/perfil` | Idade, gênero e região: participação no público x nos leads ou compras, com o índice de conversão de cada faixa |
 | `/categorias` | Páginas de entrada agrupadas por categoria de produto e por tipo de página |
 | `/novos-recorrentes` | Comparação lado a lado e funil por tipo de usuário |
 | `/qualidade` | Saúde do tracking: transaction_id ausente ou repetido, (not set), coerência do funil, quedas diárias, eventos-chave suspeitos |
 | `/explorar` | Tabela livre: até 2 dimensões e 10 métricas de qualquer campo do `getMetadata` |
+
+Cada cartão tem o botão **Exportar**: CSV com os números daquela visualização (padrão do Excel brasileiro) ou PDF só com ela, pelo "Salvar como PDF" do navegador, com o período e os filtros no topo. A página inteira continua saindo em HTML ou na impressão.
+
+Nos filtros por dimensão, as marcações valem ao clicar em Aplicar ou fora da lista (Esc cancela), e "Só este" aplica um valor de uma vez. Região usa a dimensão `region` do GA4 (estado, a partir do IP), com os nomes em português na tela.
 
 Todos os filtros ficam na URL (`?periodo=last7&plataforma=Android&...`), então qualquer visão pode ser compartilhada por link. Clicar num valor de tabela ou numa barra aplica o filtro no painel inteiro.
 
@@ -117,9 +121,9 @@ Variáveis no servidor (nunca suba os arquivos de `credentials/`):
 - **Funil padrão:** escolhido pelos eventos da propriedade. Se houver `iniciar_simulacao`, `generate_lead` etc., usa o funil de simulação; senão, o de e-commerce do GA4. Dá para editar as etapas na página do funil.
 - **Conversão:** `sessionKeyEventRate:purchase` (sessões com compra ÷ sessões), que não infla com compra duplicada. Cai para compras ÷ sessões quando o purchase não é evento-chave ou quando 30% ou mais das compras chegam sem origem (purchase enviado pelo servidor sem o ID do navegador), porque aí a taxa por sessão vai a zero sem a venda ter caído.
 - **Compras sem origem:** o painel avisa nas quebras por canal, dispositivo, página e tipo de usuário, marca a etapa de compra como "desconectada" no funil e tira essas regras dos insights.
-- **Meta: Compra | Lead:** seletor na barra de filtros (`?meta=lead` na URL) que troca a conversão do painel inteiro. Na meta Lead, a conversão é `sessionKeyEventRate:<evento>` (sessões com lead ÷ sessões) e a contagem é `keyEvents:<evento>`; o evento vem de `CRO_LEAD_EVENT` (padrão `generate_lead`). Visão geral, canais, tecnologia, páginas, novos x recorrentes e insights passam a usar leads; as colunas de crédito e ticket saem das tabelas porque são do purchase. O seletor só aparece quando o evento é evento-chave na propriedade (hoje, só no Site); em outra propriedade a meta volta para compra. Como o lead mantém a origem, é a meta indicada para analisar canais e páginas enquanto as compras chegam sem origem, e o aviso de compras sem origem traz o atalho "Ver por lead". O GA4 não recalcula eventos-chave para trás: no Site, o `generate_lead` só conta como evento-chave desde 13/10/2026, e o painel avisa quando o período atual ou o de comparação começa antes disso (a variação fica sem base).
+- **Meta: Compra | Lead:** seletor sempre à vista na barra de filtros (`?meta=lead` na URL) que troca a conversão do painel inteiro, nos dois sentidos. Na meta Lead, a conversão é `sessionKeyEventRate:<evento>` (sessões com lead ÷ sessões) e a contagem é `keyEvents:<evento>`; o evento vem de `CRO_LEAD_EVENT` (padrão `generate_lead`). Visão geral, canais, tecnologia, páginas, novos x recorrentes e insights passam a usar leads; as colunas de receita e ticket saem das tabelas porque são do purchase. O seletor só aparece quando o evento é evento-chave na propriedade (hoje, só no Site); em outra propriedade a meta volta para compra. Como o lead mantém a origem, é a meta indicada para analisar canais e páginas enquanto as compras chegam sem origem, e o aviso de compras sem origem traz o atalho "Ver por lead". O GA4 não recalcula eventos-chave para trás: no Site, o `generate_lead` só conta como evento-chave desde 13/10/2026, e o painel avisa quando o período atual ou o de comparação começa antes disso (a variação fica sem base).
 - **Comparação:** período anterior de mesmo tamanho ou ano anterior; os períodos terminam ontem (hoje ainda está incompleto).
-- **Cache:** em memória no servidor, 20 min para períodos recentes, 6 h para períodos fechados, 12 h para metadata.
+- **Cache:** em memória no servidor, 20 min para períodos recentes, 6 h para períodos fechados, 3 h para as opções dos filtros, 12 h para metadata. Na prática, os números de ontem entram na primeira consulta do dia e se renovam a cada 20 min enquanto o GA4 termina de processar (até 48 h).
 - **Limites do GA4:** avisos quando há thresholding, linha "(other)" (cardinalidade) ou amostragem.
 
 ## Estrutura

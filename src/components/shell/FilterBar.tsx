@@ -1,11 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { Calendar, Check, ChevronDown, SlidersHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { Calendar, Check, SlidersHorizontal, X } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Popover } from "@/components/ui/Popover";
 import { fmtDay, fmtRange } from "@/lib/format";
+import { regionLabel } from "@/lib/regions";
 import {
   COMPARE_MODES,
   FILTERS,
@@ -40,36 +41,6 @@ export const CONTROL_BASE =
 /** Pílula completa, com borda e fundo. O botão de filtros do celular usa só a base para trocar as cores. */
 export const CONTROL = `${CONTROL_BASE} border border-line bg-surface hover:bg-active`;
 
-/** Select nativo com a mesma cara das pílulas (a seta nativa sai, entra a do painel). */
-function PillSelect({
-  label,
-  value,
-  onChange,
-  title,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  title?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative">
-      <select
-        aria-label={label}
-        title={title}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={clsx(CONTROL, "cursor-pointer appearance-none pr-8")}
-      >
-        {children}
-      </select>
-      <ChevronDown size={14} aria-hidden className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 opacity-60" />
-    </div>
-  );
-}
-
 /**
  * Uma linha acima do conteúdo: período (atalhos de semana, mês e 28 dias, e o calendário com a
  * comparação), meta e filtros por dimensão, como campanha e origem / mídia. No celular ficam o
@@ -92,6 +63,8 @@ export function FilterBar({ current, comparison, today, options, leadAvailable }
         </span>
       )}
 
+      {leadAvailable && <GoalSwitch goal={state.goal} onChange={(goal) => go({ ...state, goal })} />}
+
       <button
         type="button"
         aria-expanded={more}
@@ -106,27 +79,14 @@ export function FilterBar({ current, comparison, today, options, leadAvailable }
       <div className={clsx("contents", !more && "max-md:hidden")}>
         <span className="mx-1 hidden h-5 w-px bg-control md:block" aria-hidden />
 
-        {leadAvailable && (
-          <PillSelect
-            label="Meta de conversão"
-            value={state.goal}
-            onChange={(v) => go({ ...state, goal: v as Goal })}
-            title="Evento usado como conversão em todo o painel"
-          >
-            {GOALS.map((g) => (
-              <option key={g.id} value={g.id}>
-                Meta: {g.label}
-              </option>
-            ))}
-          </PillSelect>
-        )}
-
         {FILTERS.filter((f) => options[f.key]?.length).map((f) => (
           <DimensionFilter
             key={f.key}
             label={f.label}
             values={options[f.key] ?? []}
             selected={state.filters[f.key] ?? []}
+            format={f.key === "regiao" ? regionLabel : undefined}
+            wide={f.key === "campanha" || f.key === "origem"}
             onApply={(vals) => go({ ...state, filters: { ...state.filters, [f.key]: vals } })}
           />
         ))}
@@ -154,6 +114,37 @@ function shortRange(r: Range, today: string) {
 const PILL = "flex h-7 items-center gap-1.5 rounded-full px-3.5 text-sm whitespace-nowrap transition-colors";
 const PILL_ON = "bg-primary font-semibold text-primary-ink";
 const PILL_OFF = "text-ink-2 hover:text-ink";
+
+/**
+ * Meta de conversão do painel inteiro, sempre à vista (também no celular): troca entre lead e compra
+ * com um clique, nos dois sentidos, em vez de um menu escondido.
+ */
+function GoalSwitch({ goal, onChange }: { goal: Goal; onChange: (g: Goal) => void }) {
+  return (
+    <div
+      role="group"
+      aria-label="Meta de conversão"
+      title="Evento usado como conversão em todo o painel"
+      className="flex h-9 items-center gap-0.5 rounded-full border border-line bg-surface p-1"
+    >
+      <span className="pr-1 pl-2.5 text-xs font-medium text-muted">Meta</span>
+      {GOALS.map((g) => {
+        const on = goal === g.id;
+        return (
+          <button
+            key={g.id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => !on && onChange(g.id)}
+            className={clsx(PILL, on ? PILL_ON : PILL_OFF)}
+          >
+            {g.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Atalhos em pílulas (semana, mês, 28 dias) e o calendário com os outros períodos e a comparação. */
 function PeriodControl({
@@ -294,65 +285,118 @@ function PeriodControl({
   );
 }
 
-/** Filtro de uma dimensão, com vários valores. As marcações ficam num rascunho e só valem no Aplicar. */
+/**
+ * Filtro de uma dimensão, com vários valores. As marcações ficam num rascunho e valem ao clicar em
+ * Aplicar, ao clicar fora ou no botão de novo; Esc descarta. "Só este" aplica um valor de uma vez.
+ * Os valores já aplicados aparecem no topo da lista.
+ */
 function DimensionFilter({
   label,
   values,
   selected,
   onApply,
+  format = (v: string) => v,
+  wide,
 }: {
   label: string;
   values: string[];
   selected: string[];
   onApply: (vals: string[]) => void;
+  /** Texto mostrado para cada valor (o filtro usa o valor original). */
+  format?: (v: string) => string;
+  /** Lista mais larga, para nomes longos (campanha, origem / mídia). */
+  wide?: boolean;
 }) {
   const [draft, setDraft] = useState<string[]>(selected);
   const [query, setQuery] = useState("");
-  const visible = values.filter((v) => v.toLowerCase().includes(query.toLowerCase()));
+  const q = query.trim().toLowerCase();
+  const ordered = useMemo(
+    () => [...values.filter((v) => selected.includes(v)), ...values.filter((v) => !selected.includes(v))],
+    [values, selected],
+  );
+  const visible = ordered.filter((v) => !q || v.toLowerCase().includes(q) || format(v).toLowerCase().includes(q));
   const toggle = (v: string) => setDraft((d) => (d.includes(v) ? d.filter((x) => x !== v) : [...d, v]));
+  const differs = (vals: string[]) => vals.length !== selected.length || vals.some((v) => !selected.includes(v));
+  const apply = (vals: string[]) => {
+    if (differs(vals)) onApply(vals);
+  };
 
-  // Ao abrir, o rascunho volta ao que está aplicado: marcações de antes, sem Aplicar, são descartadas.
   return (
     <Popover
+      width={wide ? 380 : 300}
       active={selected.length > 0}
-      onOpenChange={(o) => o && setDraft(selected)}
+      onOpenChange={(open, reason) => {
+        // Ao abrir, o rascunho volta ao que está aplicado. Ao fechar por fora, as marcações valem.
+        if (open) {
+          setDraft(selected);
+          setQuery("");
+        } else if (reason === "outside" || reason === "toggle") {
+          apply(draft);
+        }
+      }}
       label={
-        <span>
+        <span className="max-w-[16rem] truncate">
           {label}
           {selected.length > 0 && (
-            <span className="text-ink">: {selected.length === 1 ? selected[0] : `${selected.length} selecionados`}</span>
+            <span className="text-ink">: {selected.length === 1 ? format(selected[0]) : `${selected.length} selecionados`}</span>
           )}
         </span>
       }
     >
       {(close) => (
         <div>
-          {/* Busca só quando a lista passa de 8 valores. */}
+          {/* Busca só quando a lista passa de 8 valores. Enter aplica. */}
           {values.length > 8 && (
             <input
               type="search"
-              placeholder="Buscar"
+              autoFocus
+              placeholder={`Buscar ${label.toLowerCase()}`}
               aria-label={`Buscar ${label}`}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                close();
+                apply(draft);
+              }}
               className="mb-1 h-9 w-full rounded-lg border border-control bg-surface px-3 text-sm text-ink"
             />
           )}
-          <ul className="max-h-64 overflow-y-auto">
+          <ul className="thin-scroll max-h-72 overflow-y-auto">
             {visible.map((v) => (
-              <li key={v}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink hover:bg-raised">
-                  <input type="checkbox" checked={draft.includes(v)} onChange={() => toggle(v)} className="accent-accent" />
-                  <span className="truncate">{v}</span>
+              <li key={v} className="group flex items-center rounded-lg hover:bg-raised">
+                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 px-2 py-2 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    checked={draft.includes(v)}
+                    onChange={() => toggle(v)}
+                    className="size-4 shrink-0 accent-accent"
+                  />
+                  <span className="truncate" title={format(v)}>
+                    {format(v)}
+                  </span>
                 </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    apply([v]);
+                  }}
+                  className="mr-1 shrink-0 rounded-full px-2 py-1 text-xs font-medium text-accent opacity-0 group-hover:opacity-100 hover:underline focus-visible:opacity-100 max-md:opacity-100"
+                >
+                  Só este
+                </button>
               </li>
             ))}
+            {!visible.length && <li className="px-2 py-3 text-sm text-muted">Nenhum valor encontrado.</li>}
           </ul>
           <div className="mt-1 flex gap-2 border-t border-rule px-1 pt-2">
             <button
               type="button"
+              disabled={!draft.length}
               onClick={() => setDraft([])}
-              className={clsx("h-9 flex-1 rounded-full border border-line text-sm text-ink hover:bg-raised", !draft.length && "opacity-50")}
+              className="h-9 flex-1 rounded-full border border-line text-sm text-ink hover:bg-raised disabled:opacity-50"
             >
               Limpar
             </button>
@@ -360,11 +404,11 @@ function DimensionFilter({
               type="button"
               onClick={() => {
                 close();
-                onApply(draft);
+                apply(draft);
               }}
               className="h-9 flex-1 rounded-full bg-primary text-sm font-semibold text-primary-ink hover:bg-primary-hover"
             >
-              Aplicar
+              Aplicar{draft.length > 0 && ` (${draft.length})`}
             </button>
           </div>
         </div>

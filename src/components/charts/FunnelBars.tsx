@@ -1,6 +1,7 @@
 import { ArrowDown, CornerDownRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/primitives";
+import { ExportData } from "@/components/ui/CardExport";
 import { fmtInt, fmtPct, fmtPP } from "@/lib/format";
 import type { FunnelStep } from "@/lib/ga4/funnel";
 
@@ -30,6 +31,28 @@ export function FunnelBars({
 
   return (
     <ol className="space-y-1">
+      <ExportData
+        table={{
+          columns: [
+            { key: "n", label: "Etapa", format: "int" },
+            { key: "label", label: "Nome", format: "text" },
+            { key: "users", label: "Usuários", format: "int" },
+            { key: "fromStart", label: "% do início", format: "pct" },
+            { key: "nextRate", label: "Seguem para a próxima", format: "pct" },
+            { key: "dropRate", label: "Abandonam", format: "pct" },
+            ...(prev ? [{ key: "prevUsers", label: "Usuários (comparação)", format: "int" as const }] : []),
+          ],
+          rows: steps.map((s, i) => ({
+            n: i + 1,
+            label: s.label,
+            users: s.users,
+            fromStart: s.fromStart,
+            nextRate: s.nextRate,
+            dropRate: s.dropRate,
+            prevUsers: prev?.[i]?.users,
+          })),
+        }}
+      />
       {steps.map((s, i) => {
         const p = prev?.[i];
         const passDiff = s.nextRate !== null && p?.nextRate !== null && p?.nextRate !== undefined ? s.nextRate - p.nextRate : null;

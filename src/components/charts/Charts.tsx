@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ExportData } from "@/components/ui/CardExport";
+
 import { useDashboardNav } from "@/components/shell/PendingProvider";
 import { useStateHref } from "@/components/shell/useStateHref";
 import { fmtDay, formatValue, type FormatKind } from "@/lib/format";
@@ -345,6 +347,18 @@ export function OpportunityMatrix({
 
   return (
     <div>
+      <ExportData
+        table={{
+          columns: [
+            { key: "name", label: itemLabel.charAt(0).toUpperCase() + itemLabel.slice(1), format: "text" },
+            { key: "x", label: xLabel, format: xFormat },
+            { key: "y", label: yLabel, format: yFormat },
+            ...(points.some((p) => p.weight !== undefined) && weightLabel ? [{ key: "w", label: weightLabel, format: weightFormat }] : []),
+            { key: "flag", label: "Grupo", format: "text" as const },
+          ],
+          rows: points.map((p) => ({ name: p.name, x: p.x, y: p.y, w: p.weight, flag: p.flagged ? flaggedLabel : otherLabel })),
+        }}
+      />
       <div
         className={
           ranked.length
@@ -528,6 +542,17 @@ export function RateBars({
 
   return (
     <div>
+      <ExportData
+        table={{
+          columns: [
+            { key: "name", label: "Categoria", format: "text" },
+            { key: "x", label: xLabel, format: xFormat },
+            { key: "y", label: yLabel, format: yFormat },
+            { key: "flag", label: "Grupo", format: "text" as const },
+          ],
+          rows: points.map((p) => ({ name: p.name, x: p.x, y: p.y, flag: p.flagged ? flaggedLabel : otherLabel })),
+        }}
+      />
       <EChart option={option} height={rows.length * 64 + 56} ariaLabel={`${yLabel} por categoria`} />
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-ink-2">
         {rows.some((r) => r.flagged) && <LegendKey shape="rect" color="var(--highlight)" label={flaggedLabel} />}
@@ -625,6 +650,16 @@ export function ShareBars({
 
   return (
     <div>
+      <ExportData
+        table={{
+          columns: [
+            { key: "cat", label: "Categoria", format: "text" },
+            { key: "a", label: a.label, format: "pct" },
+            { key: "b", label: b.label, format: "pct" },
+          ],
+          rows: categories.map((c, i) => ({ cat: c, a: a.values[i], b: b.values[i] })),
+        }}
+      />
       <EChart
         option={option}
         height={height ?? Math.max(200, categories.length * 56 + 40)}
@@ -701,5 +736,24 @@ export function MiniTrend({
     };
   }, [t, points, anomalies, title]);
 
-  return <EChart option={option} height={140} ariaLabel={`${title} por dia`} />;
+  return (
+    <>
+      <ExportData
+        table={{
+          title,
+          columns: [
+            { key: "date", label: "Data", format: "text" },
+            { key: "value", label: title, format: "int" },
+            { key: "drop", label: "Queda fora do padrão", format: "text" },
+          ],
+          rows: points.map((p) => ({
+            date: `${p.date.slice(0, 4)}-${p.date.slice(4, 6)}-${p.date.slice(6, 8)}`,
+            value: p.value,
+            drop: anomalies.includes(p.date) ? "sim" : "",
+          })),
+        }}
+      />
+      <EChart option={option} height={140} ariaLabel={`${title} por dia`} />
+    </>
+  );
 }

@@ -156,6 +156,7 @@ function Explore({ page, md, sp }: { page: PageContext; md: Metadata; sp: Search
     { label: "Origem / mídia", d1: "sessionSourceMedium", m: defaults },
     { label: "Campanhas", d1: "sessionCampaignName", d2: "sessionSourceMedium", m: defaults },
     { label: "Aparelhos", d1: "mobileDeviceBranding", d2: "operatingSystem", m: mets("activeUsers", "sessions", "engagementRate", CONVERSION_METRIC) },
+    { label: "Regiões", d1: "region", m: defaults },
     { label: "Cidades", d1: "city", m: defaults },
   ].filter((s) => has.d(s.d1) && (!s.d2 || has.d(s.d2)) && s.m.length);
 

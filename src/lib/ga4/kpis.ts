@@ -7,7 +7,7 @@ import { ATTRIBUTION_ALERT, purchaseAttribution } from "../quality";
 import { inList, runReport, type QueryContext, type ReportRow, type Values } from "./report";
 
 /**
- * Nomes exibidos. Receita: em consórcio, o valor do purchase é o crédito contratado.
+ * Nomes exibidos. Receita: valor do evento purchase (CRO_REVENUE_LABEL troca o rótulo).
  * Meta: os rótulos de conversão e da contagem seguem a meta escolhida (compra ou lead).
  */
 export function getTerms(goal: Goal = "compra") {

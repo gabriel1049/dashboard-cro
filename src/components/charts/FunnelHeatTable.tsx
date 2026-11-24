@@ -1,6 +1,7 @@
 import clsx from "clsx";
 
 import { fmtCompact, fmtInt, fmtPct } from "@/lib/format";
+import { ExportData } from "@/components/ui/CardExport";
 
 export type HeatRow = {
   segment: string;
@@ -38,6 +39,22 @@ export function FunnelHeatTable({
   const overall = total.users[0] ? total.users.at(-1)! / total.users[0] : 0;
   return (
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <ExportData
+        table={{
+          columns: [
+            { key: "segment", label: segmentLabel, format: "text" },
+            ...(hasSite ? [{ key: "site", label: `${siteLabel} (${unit})`, format: "int" as const }] : []),
+            ...steps.map((s, i) => ({ key: `s${i}`, label: `${i + 1}. ${s} (${unit})`, format: "int" as const })),
+            { key: "conv", label: "1ª → última", format: "pct" },
+          ],
+          rows: [total, ...rows].map((r) => ({
+            segment: r.segment,
+            site: r.siteUsers,
+            ...Object.fromEntries(r.users.map((u, i) => [`s${i}`, u])),
+            conv: r.users[0] ? r.users.at(-1)! / r.users[0] : null,
+          })),
+        }}
+      />
       <table className="w-full min-w-max border-separate border-spacing-x-1 border-spacing-y-1 text-sm tabular">
         <thead>
           <tr className="text-xs text-muted">
